@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -9,25 +10,27 @@ import (
 	"os/exec"
 
 	"github.com/fsnotify/fsnotify"
-	"gopkg.in/yaml.v2"
 )
 
-var dir = flag.String("dir", "", "设置fs监听目录")
+var d = flag.String("d", ".", "监听的目录dir")
 
 func main() {
-	// 载入配置
-	getConfig()
-	// 命令行配置优先
+
 	flag.Parse()
 
 	var args = flag.Args()
+
 	if len(args) > 0 {
 		conf.Command = args
+	} else {
+		log.Println("请输入命令")
 	}
-	if *dir != "" {
-		conf.WatchDirs = append([]string{}, *dir)
-	}
-	log.Println(conf)
+
+	conf.WatchDirs = append([]string{}, *d)
+
+	log.Println("监听目录:", *d)
+
+	log.Println("执行命令:", args)
 
 	start()
 
@@ -69,10 +72,10 @@ func main() {
 }
 
 var cmd *exec.Cmd
+var cancel context.CancelFunc
 
 // 启动
 func start() {
-
 	cmd = exec.Command(conf.Command[0], conf.Command[1:]...)
 	// cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -83,13 +86,7 @@ func start() {
 // kill
 func kill() {
 
-	if cmd != nil && cmd.Process != nil {
-		err := cmd.Process.Kill()
-		if err != nil {
-			fmt.Println(err)
-		}
-		cmd.Wait()
-	}
+	exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprint(cmd.Process.Pid)).Run()
 }
 
 // restart
@@ -105,22 +102,6 @@ type Config struct {
 }
 
 var conf Config
-
-// getConfig
-func getConfig() {
-	var exis, _ = PathExists("./config.yaml")
-	if !exis {
-		return
-	}
-	yamlFile, err := ioutil.ReadFile("./config.yaml")
-	if err != nil {
-		log.Println(err.Error())
-	}
-	err = yaml.Unmarshal(yamlFile, &conf)
-	if err != nil {
-		log.Println(err.Error())
-	}
-}
 
 // GetAllDir GetAllDir
 func GetAllDir(pathname string) ([]string, error) {
@@ -145,16 +126,4 @@ func GetAllDir(pathname string) ([]string, error) {
 		}
 	}
 	return allDir, nil
-}
-
-// PathExists PathExists
-func PathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
 }
